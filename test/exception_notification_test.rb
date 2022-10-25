@@ -1,6 +1,10 @@
 require 'test_helper'
 
 class ExceptionNotificationTest < ActiveSupport::TestCase
+  # test "should have default error grouping" do
+  #   assert ExceptionNotifier.default_error_grouping == false
+  # end
+
   test "should have default ignored exceptions" do
     assert ExceptionNotifier.default_ignore_exceptions == ['ActiveRecord::RecordNotFound', 'AbstractController::ActionNotFound', 'ActionController::RoutingError']
   end

@@ -3,6 +3,7 @@
   <%= raw @exception.message %>
   <%= raw @backtrace.first %>
 
+Occurred <%= "(#{@options[:accumulated_errors_count]} times)" if @options[:accumulated_errors_count].to_i > 1 %>
 <%
     sections = @sections.map do |section|
       begin

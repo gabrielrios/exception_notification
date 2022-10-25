@@ -1,8 +1,10 @@
 require 'action_dispatch'
 require 'exception_notifier/notifier'
 require 'exception_notifier/campfire_notifier'
+require 'exception_notifier/modules/error_grouping'
 
 class ExceptionNotifier
+  include ErrorGrouping
 
   def self.default_ignore_exceptions
     [].tap do |exceptions|
@@ -29,12 +31,18 @@ class ExceptionNotifier
     Notifier.default_normalize_subject    = @options[:normalize_subject]
     Notifier.default_smtp_settings        = @options[:smtp_settings]
     Notifier.default_email_headers        = @options[:email_headers]
+    self.class.error_grouping             = @options[:error_grouping] if @options[:error_grouping]
+    self.class.error_grouping_period      = @options[:error_grouping_period] if @options[:error_grouping_period]
+
+    if defined? Rails
+      self.class.error_grouping_cache = Rails.cache
+    end
 
     @campfire = CampfireNotifier.new @options[:campfire]
 
-    @options[:ignore_exceptions] ||= self.class.default_ignore_exceptions
-    @options[:ignore_crawlers]   ||= self.class.default_ignore_crawlers
-    @options[:ignore_if]         ||= lambda { |env, e| false }
+    @options[:ignore_exceptions]        ||= self.class.default_ignore_exceptions
+    @options[:ignore_crawlers]          ||= self.class.default_ignore_crawlers
+    @options[:ignore_if]                ||= lambda { |env, e| false }
   end
 
   def call(env)
@@ -58,6 +66,8 @@ class ExceptionNotifier
     return false if ignored_exception?(options[:ignore_exceptions], exception)
     return false if from_crawler?(options[:ignore_crawlers], env['HTTP_USER_AGENT'])
     return false if conditionally_ignored?(options[:ignore_if], env, exception)
+    return false if ignore_by_group?(exception, options)
+    true
   end
 
   def ignored_exception?(ignore_array, exception)
@@ -75,5 +85,13 @@ class ExceptionNotifier
     ignore_proc.call(env, exception)
   rescue Exception => ex
     false
+  end
+
+  def ignore_by_group?(exception, options)
+    return false unless options[:error_grouping]
+
+    errors_count = self.class.group_error!(exception, options)
+    factor = Math.log2(errors_count)
+    factor.to_i != factor
   end
 end
