@@ -43,9 +43,7 @@ class ExceptionNotifier
     options = (env['exception_notifier.options'] ||= Notifier.default_options)
     options.reverse_merge!(@options)
 
-    unless ignored_exception(options[:ignore_exceptions], exception)       ||
-           from_crawler(options[:ignore_crawlers], env['HTTP_USER_AGENT']) ||
-           conditionally_ignored(options[:ignore_if], env, exception)
+    if send_notification?(exception, env, options)
       Notifier.exception_notification(env, exception).deliver
       @campfire.exception_notification(exception)
       env['exception_notifier.delivered'] = true
@@ -56,18 +54,24 @@ class ExceptionNotifier
 
   private
 
-  def ignored_exception(ignore_array, exception)
+  def send_notification?(exception, env, options)
+    return false if ignored_exception?(options[:ignore_exceptions], exception)
+    return false if from_crawler?(options[:ignore_crawlers], env['HTTP_USER_AGENT'])
+    return false if conditionally_ignored?(options[:ignore_if], env, exception)
+  end
+
+  def ignored_exception?(ignore_array, exception)
     Array.wrap(ignore_array).map(&:to_s).include?(exception.class.name)
   end
 
-  def from_crawler(ignore_array, agent)
+  def from_crawler?(ignore_array, agent)
     ignore_array.each do |crawler|
       return true if (agent =~ Regexp.new(crawler))
     end unless ignore_array.blank?
     false
   end
 
-  def conditionally_ignored(ignore_proc, env, exception)
+  def conditionally_ignored?(ignore_proc, env, exception)
     ignore_proc.call(env, exception)
   rescue Exception => ex
     false
